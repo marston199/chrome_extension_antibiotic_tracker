@@ -2,6 +2,7 @@ const STORAGE_KEY = "trackers";
 const BATCH_SIZE = 8;
 const DIALOG_ID = "abx-tracker-dialog";
 const TOOLBAR_BTN_ID = "abx-tracker-toolbar-button";
+let lastEditorSelectionContext = null;
 
 const WEEKDAY_COLORS = {
   0: "#f9d5e5",
@@ -15,6 +16,7 @@ const WEEKDAY_COLORS = {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "OPEN_TRACKER_DIALOG") {
+    captureEditorSelectionContext();
     openTrackerDialog();
   }
 });
@@ -73,12 +75,14 @@ function injectToolbarEntry() {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    captureEditorSelectionContext();
     openTrackerDialog();
   });
 
   button.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
+      captureEditorSelectionContext();
       openTrackerDialog();
     }
   });
@@ -186,7 +190,35 @@ async function patchTracker(trackerId, patch) {
   await saveTrackers(trackers);
 }
 
+function isEditorRange(range) {
+  const container = range.startContainer.nodeType === 1
+    ? range.startContainer
+    : range.startContainer.parentElement;
+
+  return Boolean(container?.closest("[role='paragraph'], .kix-lineview, .kix-appview-editor"));
+}
+
+function captureEditorSelectionContext() {
+  const context = findActiveSelectionContext(window, { editorOnly: true });
+  if (!context) {
+    return null;
+  }
+
+  const liveRange = context.range;
+  const clonedRange = context.document.createRange();
+  clonedRange.setStart(liveRange.startContainer, liveRange.startOffset);
+  clonedRange.setEnd(liveRange.endContainer, liveRange.endOffset);
+
+  lastEditorSelectionContext = {
+    ...context,
+    range: clonedRange
+  };
+
+  return lastEditorSelectionContext;
+}
+
 function openTrackerDialog() {
+  const dialogSelectionContext = captureEditorSelectionContext() || lastEditorSelectionContext;
   document.getElementById(DIALOG_ID)?.remove();
   const wrapper = document.createElement("div");
   wrapper.id = DIALOG_ID;
@@ -234,7 +266,7 @@ function openTrackerDialog() {
       return;
     }
 
-    const inserted = insertTrackerLine(tracker);
+    const inserted = insertTrackerLine(tracker, dialogSelectionContext);
     if (!inserted) {
       return;
     }
@@ -246,7 +278,7 @@ function openTrackerDialog() {
   document.body.appendChild(wrapper);
 }
 
-function findActiveSelectionContext(rootWindow = window) {
+function findActiveSelectionContext(rootWindow = window, options = {}) {
   const queue = [rootWindow];
 
   while (queue.length) {
@@ -262,11 +294,15 @@ function findActiveSelectionContext(rootWindow = window) {
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
       if (range && range.startContainer) {
-        return {
-          selection,
-          range,
-          document: currentWindow.document
-        };
+        if (options.editorOnly && !isEditorRange(range)) {
+          // Skip non-editor selections (e.g., dialog form fields).
+        } else {
+          return {
+            selection,
+            range,
+            document: currentWindow.document
+          };
+        }
       }
     }
 
@@ -285,8 +321,8 @@ function findActiveSelectionContext(rootWindow = window) {
   return null;
 }
 
-function insertTrackerLine(tracker) {
-  const selectionContext = findActiveSelectionContext(window);
+function insertTrackerLine(tracker, preferredSelectionContext = null) {
+  const selectionContext = preferredSelectionContext || lastEditorSelectionContext || findActiveSelectionContext(window, { editorOnly: true });
   if (!selectionContext) {
     return false;
   }

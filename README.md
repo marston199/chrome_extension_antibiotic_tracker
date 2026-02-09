@@ -15,6 +15,7 @@ This repository contains a Manifest V3 Chrome extension that adds a top-menubar 
   - midnight rollover timer
 - Batch processing (`BATCH_SIZE=8`) with cooperative yielding between batches.
 - Menubar trigger injection retries to account for delayed Google Docs UI hydration.
+- Insert flow preserves the editor selection before opening the dialog, so text inserts into the document instead of the dialog fields.
 
 ## Notes on architecture
 
