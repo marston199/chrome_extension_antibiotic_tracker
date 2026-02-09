@@ -234,7 +234,11 @@ function openTrackerDialog() {
       return;
     }
 
-    insertTrackerLine(tracker);
+    const inserted = insertTrackerLine(tracker);
+    if (!inserted) {
+      return;
+    }
+
     await upsertTracker(tracker);
     wrapper.remove();
   });
@@ -242,13 +246,53 @@ function openTrackerDialog() {
   document.body.appendChild(wrapper);
 }
 
-function insertTrackerLine(tracker) {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return;
+function findActiveSelectionContext(rootWindow = window) {
+  const queue = [rootWindow];
+
+  while (queue.length) {
+    const currentWindow = queue.shift();
+
+    let selection;
+    try {
+      selection = currentWindow.getSelection();
+    } catch (_error) {
+      selection = null;
+    }
+
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (range && range.startContainer) {
+        return {
+          selection,
+          range,
+          document: currentWindow.document
+        };
+      }
+    }
+
+    for (const frame of currentWindow.frames) {
+      try {
+        const frameDocument = frame.document;
+        if (frameDocument) {
+          queue.push(frame);
+        }
+      } catch (_error) {
+        // Ignore cross-origin frames.
+      }
+    }
   }
 
-  const range = selection.getRangeAt(0);
+  return null;
+}
+
+function insertTrackerLine(tracker) {
+  const selectionContext = findActiveSelectionContext(window);
+  if (!selectionContext) {
+    return false;
+  }
+
+  const { selection, range, document: targetDocument } = selectionContext;
+
   const container = range.startContainer.nodeType === Node.ELEMENT_NODE
     ? range.startContainer
     : range.startContainer.parentElement;
@@ -260,7 +304,7 @@ function insertTrackerLine(tracker) {
   }
 
   const line = buildTrackerLine(tracker);
-  const span = document.createElement("span");
+  const span = targetDocument.createElement("span");
   span.dataset.abxTrackerId = tracker.trackerId;
   span.textContent = line;
   span.style.backgroundColor = WEEKDAY_COLORS[getWeekday()];
@@ -268,14 +312,25 @@ function insertTrackerLine(tracker) {
 
   range.deleteContents();
   range.insertNode(span);
-  range.collapse(false);
-  range.insertNode(document.createTextNode("\n"));
+
+  const trailingBreak = targetDocument.createTextNode("\n");
+  range.setStartAfter(span);
+  range.setEndAfter(span);
+  range.insertNode(trailingBreak);
+
+  selection.removeAllRanges();
+  const cursorRange = targetDocument.createRange();
+  cursorRange.setStartAfter(trailingBreak);
+  cursorRange.collapse(true);
+  selection.addRange(cursorRange);
 
   tracker.paragraphAnchor = paragraphId;
   tracker.textRange = { startOffset: 0, length: line.length };
   tracker.lastUpdatedDate = toIsoDate();
   tracker.lastAppliedWeekday = getWeekday();
+  return true;
 }
+
 
 async function runDailyUpdates() {
   const docId = extractDocumentId();

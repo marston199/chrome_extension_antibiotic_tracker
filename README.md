@@ -1,11 +1,10 @@
 # Chrome Extension: Antibiotic Tracker for Google Docs Census
 
-This repository contains a Manifest V3 Chrome extension that adds a right-click workflow for inserting and maintaining plain-text antibiotic tracker lines in Google Docs.
+This repository contains a Manifest V3 Chrome extension that adds a top-menubar workflow for inserting and maintaining plain-text antibiotic tracker lines in Google Docs.
 
 ## Implemented behavior
 
-- Context menu entry: `🧪 Insert antibiotic tracker` (Google Docs documents only).
-- Additional top-menubar entry: `Antibiotic Tracker` (next to File/Edit/View) as a reliable in-doc trigger.
+- Top-menubar entry: `Antibiotic Tracker` (next to File/Edit/View) as the primary in-doc trigger.
 - Fast insert form with required antibiotic name + start date, optional interval and stop date.
 - Canonical plain-text line insertion with daily day-number recomputation.
 - Weekday color highlighting for the full inserted line.
@@ -31,4 +30,4 @@ This repository contains a Manifest V3 Chrome extension that adds a right-click 
 2. Enable **Developer mode**
 3. Click **Load unpacked** and select this repository folder.
 4. If already loaded, click **Reload** on the extension card to apply updates.
-5. Open a Google Docs document and either right-click for the tracker command or click `Antibiotic Tracker` in the top Docs menubar.
+5. Open a Google Docs document, place your cursor where you want the line, then click `Antibiotic Tracker` in the top Docs menubar.
