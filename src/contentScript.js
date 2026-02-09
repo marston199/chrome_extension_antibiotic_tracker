@@ -1,9 +1,17 @@
-import { BATCH_SIZE, WEEKDAY_COLORS } from "./constants.js";
-import { getTrackers, patchTracker, upsertTracker } from "./storage.js";
-import { buildTrackerLine, getWeekday, toIsoDate, uuid } from "./utils.js";
-
+const STORAGE_KEY = "trackers";
+const BATCH_SIZE = 8;
 const DIALOG_ID = "abx-tracker-dialog";
 const TOOLBAR_BTN_ID = "abx-tracker-toolbar-button";
+
+const WEEKDAY_COLORS = {
+  0: "#f9d5e5",
+  1: "#d9e8ff",
+  2: "#d6f5d6",
+  3: "#fff8bf",
+  4: "#e7d8ff",
+  5: "#ffe5cc",
+  6: "#ececec"
+};
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "OPEN_TRACKER_DIALOG") {
@@ -35,6 +43,10 @@ function retryToolbarInjection() {
 }
 
 function injectToolbarEntry() {
+  if (window.top !== window) {
+    return false;
+  }
+
   if (document.getElementById(TOOLBAR_BTN_ID)) {
     return true;
   }
@@ -87,6 +99,93 @@ function scheduleMidnightRefresh() {
   }, delay);
 }
 
+function toIsoDate(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function parseIsoDate(value) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function computeDayNumber(startDateIso, todayIso = toIsoDate()) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diff = Math.floor((parseIsoDate(todayIso) - parseIsoDate(startDateIso)) / dayMs);
+  return Math.max(1, diff + 1);
+}
+
+function plannedDays(startIso, stopIso) {
+  if (!stopIso) {
+    return null;
+  }
+
+  return Math.max(1, computeDayNumber(startIso, stopIso));
+}
+
+function formatShortDate(isoDate) {
+  return parseIsoDate(isoDate).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function buildTrackerLine(tracker, todayIso = toIsoDate()) {
+  const day = computeDayNumber(tracker.startDate, todayIso);
+  const total = tracker.stopDate ? plannedDays(tracker.startDate, tracker.stopDate) : null;
+  const intervalPart = tracker.dosingInterval ? ` ${tracker.dosingInterval}` : "";
+  const dayPart = total ? `Day ${day}/${total}` : `Day ${day}`;
+
+  const suffix = tracker.stopDate
+    ? `(started ${formatShortDate(tracker.startDate)} → stop ${formatShortDate(tracker.stopDate)})`
+    : `(started ${formatShortDate(tracker.startDate)})`;
+
+  return `${tracker.antibioticName}${intervalPart} — ${dayPart} ${suffix}`;
+}
+
+function getWeekday(isoDate = toIsoDate()) {
+  return parseIsoDate(isoDate).getDay();
+}
+
+function uuid() {
+  return crypto.randomUUID();
+}
+
+function extractDocumentId() {
+  const match = window.location.pathname.match(/\/document\/d\/([^/]+)/);
+  return match ? match[1] : "unknown-doc";
+}
+
+async function getTrackers() {
+  const { [STORAGE_KEY]: trackers = [] } = await chrome.storage.local.get(STORAGE_KEY);
+  return trackers;
+}
+
+async function saveTrackers(trackers) {
+  await chrome.storage.local.set({ [STORAGE_KEY]: trackers });
+}
+
+async function upsertTracker(tracker) {
+  const trackers = await getTrackers();
+  const index = trackers.findIndex((item) => item.trackerId === tracker.trackerId);
+  if (index >= 0) {
+    trackers[index] = tracker;
+  } else {
+    trackers.push(tracker);
+  }
+
+  await saveTrackers(trackers);
+}
+
+async function patchTracker(trackerId, patch) {
+  const trackers = await getTrackers();
+  const index = trackers.findIndex((item) => item.trackerId === trackerId);
+  if (index < 0) {
+    return;
+  }
+
+  trackers[index] = { ...trackers[index], ...patch };
+  await saveTrackers(trackers);
+}
+
 function openTrackerDialog() {
   document.getElementById(DIALOG_ID)?.remove();
   const wrapper = document.createElement("div");
@@ -120,10 +219,10 @@ function openTrackerDialog() {
       documentId: extractDocumentId(),
       paragraphAnchor: "",
       textRange: { startOffset: 0, length: 0 },
-      antibioticName: formData.get("antibioticName").toString().trim(),
-      startDate: formData.get("startDate").toString(),
-      dosingInterval: formData.get("dosingInterval").toString() || null,
-      stopDate: formData.get("stopDate").toString() || null,
+      antibioticName: String(formData.get("antibioticName") || "").trim(),
+      startDate: String(formData.get("startDate") || ""),
+      dosingInterval: String(formData.get("dosingInterval") || "") || null,
+      stopDate: String(formData.get("stopDate") || "") || null,
       totalPlannedDays: null,
       lastUpdatedDate: null,
       lastAppliedWeekday: null,
@@ -143,11 +242,6 @@ function openTrackerDialog() {
   document.body.appendChild(wrapper);
 }
 
-function extractDocumentId() {
-  const match = window.location.pathname.match(/\/document\/d\/([^/]+)/);
-  return match ? match[1] : "unknown-doc";
-}
-
 function insertTrackerLine(tracker) {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) {
@@ -155,9 +249,10 @@ function insertTrackerLine(tracker) {
   }
 
   const range = selection.getRangeAt(0);
-  const anchorParagraph = range.startContainer.nodeType === Node.ELEMENT_NODE
-    ? range.startContainer.closest("[role='paragraph'], p, div")
-    : range.startContainer.parentElement?.closest("[role='paragraph'], p, div");
+  const container = range.startContainer.nodeType === Node.ELEMENT_NODE
+    ? range.startContainer
+    : range.startContainer.parentElement;
+  const anchorParagraph = container?.closest("[role='paragraph'], p, div");
 
   const paragraphId = anchorParagraph?.dataset.abxParagraphId || uuid();
   if (anchorParagraph) {
@@ -173,20 +268,18 @@ function insertTrackerLine(tracker) {
 
   range.deleteContents();
   range.insertNode(span);
+  range.collapse(false);
   range.insertNode(document.createTextNode("\n"));
 
   tracker.paragraphAnchor = paragraphId;
-  tracker.textRange = {
-    startOffset: 0,
-    length: line.length
-  };
+  tracker.textRange = { startOffset: 0, length: line.length };
   tracker.lastUpdatedDate = toIsoDate();
   tracker.lastAppliedWeekday = getWeekday();
 }
 
 async function runDailyUpdates() {
   const docId = extractDocumentId();
-  const trackers = (await getTrackers()).filter((t) => t.documentId === docId && t.status === "active");
+  const trackers = (await getTrackers()).filter((tracker) => tracker.documentId === docId && tracker.status === "active");
   if (!trackers.length) {
     return;
   }
@@ -200,7 +293,8 @@ async function runDailyUpdates() {
 }
 
 async function refreshTracker(tracker, todayIso) {
-  if (tracker.lastUpdatedDate === todayIso && tracker.lastAppliedWeekday === getWeekday(todayIso)) {
+  const weekday = getWeekday(todayIso);
+  if (tracker.lastUpdatedDate === todayIso && tracker.lastAppliedWeekday === weekday) {
     return;
   }
 
@@ -221,7 +315,6 @@ async function refreshTracker(tracker, todayIso) {
     node.textContent = expected;
   }
 
-  const weekday = getWeekday(todayIso);
   const nextColor = WEEKDAY_COLORS[weekday];
   if (node.style.backgroundColor !== nextColor) {
     node.style.backgroundColor = nextColor;
@@ -229,7 +322,7 @@ async function refreshTracker(tracker, todayIso) {
 
   await patchTracker(tracker.trackerId, {
     textRange: { ...tracker.textRange, length: expected.length },
-    totalPlannedDays: tracker.stopDate ? expected.match(/Day \d+\/(\d+)/)?.[1] ?? null : null,
+    totalPlannedDays: tracker.stopDate ? Number(expected.match(/Day \d+\/(\d+)/)?.[1] || 0) || null : null,
     lastUpdatedDate: todayIso,
     lastAppliedWeekday: weekday
   });

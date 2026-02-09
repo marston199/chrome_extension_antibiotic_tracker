@@ -30,4 +30,5 @@ This repository contains a Manifest V3 Chrome extension that adds a right-click 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked** and select this repository folder.
-4. Open a Google Docs document and either right-click for the tracker command or click `Antibiotic Tracker` in the top Docs menubar.
+4. If already loaded, click **Reload** on the extension card to apply updates.
+5. Open a Google Docs document and either right-click for the tracker command or click `Antibiotic Tracker` in the top Docs menubar.

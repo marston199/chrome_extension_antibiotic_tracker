@@ -3,17 +3,29 @@
   "name": "Antibiotic Tracker for Google Docs Census",
   "description": "Right-click insertion and lightweight daily updates for antibiotic tracking lines in Google Docs.",
   "version": "0.1.0",
-  "permissions": ["contextMenus", "storage", "scripting", "tabs"],
-  "host_permissions": ["https://docs.google.com/document/*"],
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://docs.google.com/document/*"
+  ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["https://docs.google.com/document/*"],
-      "js": ["src/contentScript.js"],
-      "run_at": "document_idle"
+      "matches": [
+        "https://docs.google.com/document/*"
+      ],
+      "js": [
+        "src/contentScript.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "action": {
@@ -21,8 +33,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/popup/*"],
-      "matches": ["https://docs.google.com/*"]
+      "resources": [
+        "src/popup/*"
+      ],
+      "matches": [
+        "https://docs.google.com/*"
+      ]
     }
   ]
 }
