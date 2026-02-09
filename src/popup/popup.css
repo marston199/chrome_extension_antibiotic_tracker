@@ -1,0 +1,7 @@
+body { font-family: Arial, sans-serif; background: #f3f5f7; margin: 0; padding: 24px; }
+.dialog { max-width: 360px; background: #fff; margin: 0 auto; border-radius: 12px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.15); display: grid; gap: 10px; }
+h1 { font-size: 16px; margin: 0 0 4px; }
+label { display: grid; gap: 4px; font-size: 13px; }
+input, select, button { font-size: 14px; padding: 6px 8px; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.primary { background: #1a73e8; color: #fff; border: none; border-radius: 6px; }

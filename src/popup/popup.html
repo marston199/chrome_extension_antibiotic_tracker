@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Antibiotic Tracker Dialog Preview</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="dialog">
+    <h1>Insert antibiotic tracker</h1>
+    <label>Antibiotic name* <input placeholder="Ampicillin 2 g IV"></label>
+    <label>Start date* <input type="date"></label>
+    <label>Dosing interval
+      <select><option>None</option><option>q6h</option><option>q8h</option><option>q12h</option><option>q24h</option></select>
+    </label>
+    <label>Planned stop date <input type="date"></label>
+    <div class="actions"><button>Cancel</button><button class="primary">Insert</button></div>
+  </main>
+</body>
+</html>
